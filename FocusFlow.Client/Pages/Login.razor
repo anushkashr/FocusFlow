@@ -1,0 +1,124 @@
+@page "/login"
+@layout AuthLayout
+@inject AuthApiClient AuthApi
+@inject NavigationManager Nav
+@inject IConfiguration Config
+@inject ToastService Toast
+
+<PageTitle>Log in · FocusFlow</PageTitle>
+
+<div class="auth-card">
+    <section class="auth-hero" aria-hidden="true">
+        <div class="brand brand-lg">
+            <span class="brand-mark"><i class="ti ti-ripple"></i></span>
+            <span class="brand-name">FocusFlow</span>
+        </div>
+        <h2>Stay on top of every task, one wave at a time.</h2>
+        <ul class="auth-points">
+            <li><i class="ti ti-circle-check"></i> Plan tasks with due dates</li>
+            <li><i class="ti ti-filter"></i> Filter by pending or completed</li>
+            <li><i class="ti ti-shield-lock"></i> Secured with JWT</li>
+        </ul>
+        <div class="waves"></div>
+    </section>
+
+    <section class="auth-form">
+        <h1>Welcome back</h1>
+        <p class="subtitle">Log in to add, complete and delete tasks.</p>
+
+        @if (_demoFilled)
+        {
+            <div class="alert alert-info">
+                <i class="ti ti-sparkles" aria-hidden="true"></i> The demo account is filled in for you.
+            </div>
+        }
+
+        <EditForm Model="_request" OnValidSubmit="LoginAsync" class="form" novalidate>
+            <DataAnnotationsValidator />
+
+            <div class="field">
+                <label for="username">Username</label>
+                <div class="input-icon">
+                    <i class="ti ti-user" aria-hidden="true"></i>
+                    <InputText id="username" class="input" @bind-Value="_request.Username" autocomplete="username" />
+                </div>
+                <ValidationMessage For="() => _request.Username" />
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <div class="input-icon">
+                    <i class="ti ti-lock" aria-hidden="true"></i>
+                    <InputText id="password" class="input" type="@(_showPassword ? "text" : "password")"
+                               @bind-Value="_request.Password" autocomplete="current-password" />
+                    <button type="button" class="input-toggle" aria-label="@(_showPassword ? "Hide password" : "Show password")"
+                            @onclick="() => _showPassword = !_showPassword">
+                        <i class="ti @(_showPassword ? "ti-eye-off" : "ti-eye")" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <ValidationMessage For="() => _request.Password" />
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-error"><i class="ti ti-alert-circle" aria-hidden="true"></i> @_error</div>
+            }
+
+            <button type="submit" class="btn btn-accent btn-block btn-lg" disabled="@_busy">
+                @if (_busy)
+                {
+                    <i class="ti ti-loader-2 spin" aria-hidden="true"></i>
+                    <span>Logging in…</span>
+                }
+                else
+                {
+                    <span>Log in</span>
+                    <i class="ti ti-arrow-right" aria-hidden="true"></i>
+                }
+            </button>
+        </EditForm>
+
+        <a class="back-link" href=""><i class="ti ti-arrow-left" aria-hidden="true"></i> Browse tasks as a guest</a>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private readonly LoginRequest _request = new();
+    private bool _busy;
+    private bool _showPassword;
+    private bool _demoFilled;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        // Only set in wwwroot/appsettings.Development.json, so it never ships to production
+        var demo = Config.GetSection("DemoLogin");
+        if (!string.IsNullOrEmpty(demo["Username"]))
+        {
+            _request.Username = demo["Username"]!;
+            _request.Password = demo["Password"] ?? string.Empty;
+            _demoFilled = true;
+        }
+    }
+
+    private async Task LoginAsync()
+    {
+        _busy = true;
+        _error = await AuthApi.LoginAsync(_request);
+        _busy = false;
+
+        if (_error is null)
+        {
+            Toast.Success($"Welcome back, {_request.Username}.");
+            Nav.NavigateTo(SafeReturnUrl());
+        }
+    }
+
+    // Only relative paths inside this app (like "tasks"), never another site
+    private string SafeReturnUrl() =>
+        string.IsNullOrEmpty(ReturnUrl) || ReturnUrl.Contains(':') || ReturnUrl.StartsWith('/') || ReturnUrl.StartsWith('\\')
+            ? ""
+            : ReturnUrl;
+}

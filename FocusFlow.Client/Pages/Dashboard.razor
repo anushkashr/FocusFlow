@@ -1,0 +1,169 @@
+@page "/"
+@inject TaskApiClient Api
+@inject ToastService Toast
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard · FocusFlow</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">@DateTime.Today.ToString("dddd, MMMM d")</p>
+        <h1>@Greeting<AuthorizeView>, @context.User.Identity?.Name</AuthorizeView></h1>
+        <p class="subtitle">@Subtitle</p>
+    </div>
+    <AuthorizeView>
+        <button class="btn btn-accent" @onclick="() => _showForm = true">
+            <i class="ti ti-plus" aria-hidden="true"></i> New task
+        </button>
+    </AuthorizeView>
+</header>
+
+<AuthorizeView>
+    <NotAuthorized>
+        <div class="banner">
+            <i class="ti ti-lock" aria-hidden="true"></i>
+            <span>You're browsing as a guest. <a href="login">Log in</a> to add, complete and delete tasks.</span>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@if (_error is not null)
+{
+    <div class="empty-state">
+        <span class="empty-icon empty-icon-error"><i class="ti ti-plug-connected-x" aria-hidden="true"></i></span>
+        <h2>Couldn't load your tasks</h2>
+        <p>@_error</p>
+        <button class="btn btn-primary" @onclick="LoadAsync"><i class="ti ti-refresh" aria-hidden="true"></i> Try again</button>
+    </div>
+}
+else
+{
+    <section class="stats">
+        @if (_summary is null)
+        {
+            @for (var i = 0; i < 4; i++)
+            {
+                <div class="stat-card skeleton"></div>
+            }
+        }
+        else
+        {
+            <StatCard Label="Pending" Value="@_summary.Pending.ToString()" Icon="ti-hourglass" Tone="aqua" />
+            <StatCard Label="Completed" Value="@_summary.Completed.ToString()" Icon="ti-circle-check" Tone="green" />
+            <StatCard Label="Overdue" Value="@_summary.Overdue.ToString()" Icon="ti-alert-triangle" Tone="red" />
+            <div class="stat-card stat-progress">
+                <div class="progress-head">
+                    <span class="stat-label">Progress</span>
+                    <span class="stat-value">@Progress%</span>
+                </div>
+                <div class="progress-track"><div class="progress-fill" style="width: @Progress%"></div></div>
+            </div>
+        }
+    </section>
+
+    <section>
+        <div class="section-head">
+            <h2>Up next</h2>
+            <a class="link" href="tasks">View all tasks <i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+        </div>
+
+        @if (_upNext is null)
+        {
+            <div class="card-grid">
+                @for (var i = 0; i < 3; i++)
+                {
+                    <div class="task-card skeleton"></div>
+                }
+            </div>
+        }
+        else if (_upNext.Count == 0)
+        {
+            <div class="empty-state">
+                <span class="empty-icon"><i class="ti ti-beach" aria-hidden="true"></i></span>
+                <h2>All caught up</h2>
+                <p>Nothing pending. Enjoy the calm water.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card-grid">
+                @foreach (var task in _upNext)
+                {
+                    <TaskCard @key="task.Id" Item="task" OnCompleted="CompleteAsync" />
+                }
+            </div>
+        }
+    </section>
+}
+
+@if (_showForm)
+{
+    <Modal Title="New task" OnClose="() => _showForm = false">
+        <TaskForm OnSaved="OnSavedAsync" OnCancel="() => _showForm = false" />
+    </Modal>
+}
+
+@code {
+    private TaskSummary? _summary;
+    private List<TaskDto>? _upNext;
+    private string? _error;
+    private bool _showForm;
+
+    private static string Greeting => DateTime.Now.Hour switch
+    {
+        < 12 => "Good morning",
+        < 18 => "Good afternoon",
+        _ => "Good evening"
+    };
+
+    private string Subtitle => _summary switch
+    {
+        null => "Loading your tasks…",
+        { Pending: 0 } => "You have nothing pending. Nice work.",
+        { Overdue: > 0 } s => $"{s.Pending} pending, and {s.Overdue} need attention.",
+        var s => $"You have {s.Pending} pending tasks."
+    };
+
+    private int Progress =>
+        _summary is null || _summary.Pending + _summary.Completed == 0
+            ? 0
+            : (int)Math.Round(100.0 * _summary.Completed / (_summary.Pending + _summary.Completed));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _summary = await Api.GetSummaryAsync();
+            _upNext = (await Api.GetTasksAsync(1, 6, TaskItemStatus.Pending)).Items;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CompleteAsync(TaskDto task)
+    {
+        try
+        {
+            await Api.CompleteAsync(task.Id);
+            Toast.Success($"“{task.Title}” is done.");
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            Toast.Error(ex.Message);
+            if (ex.IsUnauthorized) Nav.NavigateTo("login");
+        }
+    }
+
+    private async Task OnSavedAsync(TaskDto task)
+    {
+        _showForm = false;
+        Toast.Success($"“{task.Title}” created.");
+        await LoadAsync();
+    }
+}

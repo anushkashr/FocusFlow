@@ -1,0 +1,59 @@
+@inherits LayoutComponentBase
+@inject AuthApiClient AuthApi
+@inject NavigationManager Nav
+@inject ToastService Toast
+
+<div class="shell">
+    <aside class="sidebar">
+        <a class="brand" href="">
+            <span class="brand-mark"><i class="ti ti-ripple" aria-hidden="true"></i></span>
+            <span class="brand-name">FocusFlow</span>
+        </a>
+
+        <nav class="nav" aria-label="Main">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <i class="ti ti-layout-dashboard" aria-hidden="true"></i><span>Dashboard</span>
+            </NavLink>
+            <NavLink class="nav-link" href="tasks">
+                <i class="ti ti-list-check" aria-hidden="true"></i><span>Tasks</span>
+            </NavLink>
+        </nav>
+
+        <div class="sidebar-footer">
+            <AuthorizeView>
+                <Authorized>
+                    <div class="user-chip">
+                        <span class="avatar">@Initial(context.User.Identity?.Name)</span>
+                        <span class="user-name">@context.User.Identity?.Name</span>
+                    </div>
+                    <button class="nav-link nav-logout" @onclick="LogoutAsync">
+                        <i class="ti ti-logout" aria-hidden="true"></i><span>Log out</span>
+                    </button>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="btn btn-accent btn-block" href="login">
+                        <i class="ti ti-login-2" aria-hidden="true"></i> Log in
+                    </a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </aside>
+
+    <main class="main">
+        @Body
+    </main>
+</div>
+
+<Toasts />
+
+@code {
+    private static string Initial(string? name) =>
+        string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
+
+    private async Task LogoutAsync()
+    {
+        await AuthApi.LogoutAsync();
+        Toast.Info("You've been logged out.");
+        Nav.NavigateTo("");
+    }
+}

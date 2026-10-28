@@ -1,0 +1,94 @@
+@* Shows one task. Used on the dashboard and on the task list page.
+   The card doesn't call the API itself: it raises OnCompleted / OnEdit / OnDelete
+   and the page decides what to do. Edit and Delete only appear when the page passes them. *@
+
+<article class="task-card @CardClass">
+    <div class="task-card-top">
+        <h3 class="task-title">@Item.Title</h3>
+        <span class="pill @(IsCompleted ? "pill-completed" : "pill-pending")">@Item.Status</span>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Item.Description))
+    {
+        <p class="task-desc">@Item.Description</p>
+    }
+
+    <div class="task-meta @(Item.IsOverdue ? "is-overdue" : null)">
+        <i class="ti @(Item.IsOverdue ? "ti-alert-triangle" : "ti-calendar-event")" aria-hidden="true"></i>
+        <span>@DueText</span>
+        <span class="task-date">@Item.DueDate.ToString("MMM d, yyyy")</span>
+    </div>
+
+    <AuthorizeView>
+        <div class="task-actions">
+            @if (!IsCompleted)
+            {
+                <button class="btn btn-primary btn-sm" disabled="@_busy" @onclick="CompleteAsync">
+                    <i class="ti @(_busy ? "ti-loader-2 spin" : "ti-check")" aria-hidden="true"></i> Mark complete
+                </button>
+            }
+            <div class="task-actions-end">
+                @if (OnEdit.HasDelegate)
+                {
+                    <button class="btn-icon" title="Edit" aria-label="Edit @Item.Title" @onclick="() => OnEdit.InvokeAsync(Item)">
+                        <i class="ti ti-pencil" aria-hidden="true"></i>
+                    </button>
+                }
+                @if (OnDelete.HasDelegate)
+                {
+                    <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete @Item.Title" @onclick="() => OnDelete.InvokeAsync(Item)">
+                        <i class="ti ti-trash" aria-hidden="true"></i>
+                    </button>
+                }
+            </div>
+        </div>
+    </AuthorizeView>
+</article>
+
+@code {
+    // Named Item, not Task: a property called Task would hide the Task type in this component
+    [Parameter, EditorRequired] public TaskDto Item { get; set; } = default!;
+
+    // Raised when "Mark complete" is clicked
+    [Parameter] public EventCallback<TaskDto> OnCompleted { get; set; }
+    [Parameter] public EventCallback<TaskDto> OnEdit { get; set; }
+    [Parameter] public EventCallback<TaskDto> OnDelete { get; set; }
+
+    private bool _busy;
+
+    private bool IsCompleted => Item.Status == TaskItemStatus.Completed;
+
+    private string CardClass => IsCompleted ? "is-completed" : Item.IsOverdue ? "is-overdue" : "is-pending";
+
+    private string DueText
+    {
+        get
+        {
+            if (IsCompleted)
+                return "Done";
+
+            var days = Item.DueDate.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber;
+            return days switch
+            {
+                0 => "Due today",
+                1 => "Due tomorrow",
+                > 1 => $"Due in {days} days",
+                -1 => "Overdue by 1 day",
+                _ => $"Overdue by {-days} days"
+            };
+        }
+    }
+
+    private async Task CompleteAsync()
+    {
+        _busy = true;
+        try
+        {
+            await OnCompleted.InvokeAsync(Item);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

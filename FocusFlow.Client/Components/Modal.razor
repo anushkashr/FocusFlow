@@ -1,0 +1,20 @@
+@* A centered dialog over a dimmed background. The parent decides when to show it. *@
+<div class="modal-backdrop" @onclick="OnClose">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" @onclick:stopPropagation="true">
+        <header class="modal-header">
+            <h2 id="modal-title">@Title</h2>
+            <button class="btn-icon" aria-label="Close" @onclick="OnClose">
+                <i class="ti ti-x" aria-hidden="true"></i>
+            </button>
+        </header>
+        <div class="modal-body">
+            @ChildContent
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run API",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "run", "--project", "FocusFlow.Api", "--non-interactive"],
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "dotnet watch",
+          "endsPattern": "Now listening on"
+        }
+      },
+      "presentation": { "group": "run", "panel": "dedicated" }
+    },
+    {
+      "label": "Run Client",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "run", "--project", "FocusFlow.Client", "--non-interactive"],
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "dotnet watch",
+          "endsPattern": "Now listening on"
+        }
+      },
+      "presentation": { "group": "run", "panel": "dedicated" }
+    },
+    {
+      "label": "Run FocusFlow (API + Client)",
+      "dependsOn": ["Run API", "Run Client"],
+      "dependsOrder": "parallel",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    }
+  ]
+}

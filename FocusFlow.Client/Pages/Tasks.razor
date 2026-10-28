@@ -1,0 +1,236 @@
+@page "/tasks"
+@inject TaskApiClient Api
+@inject ToastService Toast
+@inject NavigationManager Nav
+
+<PageTitle>Tasks · FocusFlow</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">Task list</p>
+        <h1>Your tasks</h1>
+        <p class="subtitle">@Subtitle</p>
+    </div>
+    <AuthorizeView>
+        <button class="btn btn-accent" @onclick="OpenCreate">
+            <i class="ti ti-plus" aria-hidden="true"></i> New task
+        </button>
+    </AuthorizeView>
+</header>
+
+<div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="Filter by status">
+        @foreach (var filter in Filters)
+        {
+            <button role="tab" class="tab @(filter == _filter ? "active" : null)" aria-selected="@(filter == _filter)"
+                    @onclick="() => SetFilterAsync(filter)">
+                @FilterName(filter)
+                @if (_summary is not null)
+                {
+                    <span class="tab-count">@Count(filter)</span>
+                }
+            </button>
+        }
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="empty-state">
+        <span class="empty-icon empty-icon-error"><i class="ti ti-plug-connected-x" aria-hidden="true"></i></span>
+        <h2>Couldn't load your tasks</h2>
+        <p>@_error</p>
+        <button class="btn btn-primary" @onclick="LoadAsync"><i class="ti ti-refresh" aria-hidden="true"></i> Try again</button>
+    </div>
+}
+else if (_result is null)
+{
+    <div class="card-grid">
+        @for (var i = 0; i < PageSize; i++)
+        {
+            <div class="task-card skeleton"></div>
+        }
+    </div>
+}
+else if (_result.Items.Count == 0)
+{
+    <div class="empty-state">
+        <span class="empty-icon"><i class="ti ti-clipboard-check" aria-hidden="true"></i></span>
+        <h2>@EmptyTitle</h2>
+        <p>Tasks you add will show up here.</p>
+        <AuthorizeView>
+            <button class="btn btn-primary" @onclick="OpenCreate"><i class="ti ti-plus" aria-hidden="true"></i> Add a task</button>
+        </AuthorizeView>
+    </div>
+}
+else
+{
+    <div class="card-grid">
+        @foreach (var task in _result.Items)
+        {
+            <TaskCard @key="task.Id" Item="task" OnCompleted="CompleteAsync" OnEdit="OpenEdit" OnDelete="AskDelete" />
+        }
+    </div>
+
+    <Pager Page="_result.Page" TotalPages="_result.TotalPages" OnPageChanged="GoToPageAsync" />
+}
+
+@if (_showForm)
+{
+    <Modal Title="@(_editing is null ? "New task" : "Edit task")" OnClose="CloseForm">
+        <TaskForm Existing="_editing" OnSaved="OnSavedAsync" OnCancel="CloseForm" />
+    </Modal>
+}
+
+@if (_deleting is not null)
+{
+    <Modal Title="Delete task?" OnClose="() => _deleting = null">
+        <p class="confirm-text">“<strong>@_deleting.Title</strong>” will be deleted for good. This can't be undone.</p>
+        <div class="form-actions">
+            <button class="btn btn-ghost" @onclick="() => _deleting = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="DeleteAsync"><i class="ti ti-trash" aria-hidden="true"></i> Delete task</button>
+        </div>
+    </Modal>
+}
+
+@code {
+    private const int PageSize = 6;
+
+    // null means "All"
+    private static readonly TaskItemStatus?[] Filters = [null, TaskItemStatus.Pending, TaskItemStatus.Completed];
+
+    private PagedResult<TaskDto>? _result;
+    private TaskSummary? _summary;
+    private TaskItemStatus? _filter;
+    private int _page = 1;
+    private string? _error;
+
+    private bool _showForm;
+    private TaskDto? _editing;
+    private TaskDto? _deleting;
+
+    private static string FilterName(TaskItemStatus? filter) => filter?.ToString() ?? "All";
+
+    private string Subtitle => _result is null
+        ? "Loading…"
+        : _filter is null
+            ? $"{_result.TotalCount} tasks in total"
+            : $"{_result.TotalCount} {_filter.Value.ToString().ToLowerInvariant()}";
+
+    private int Count(TaskItemStatus? filter) => filter switch
+    {
+        TaskItemStatus.Pending => _summary!.Pending,
+        TaskItemStatus.Completed => _summary!.Completed,
+        _ => _summary!.Pending + _summary.Completed
+    };
+
+    private string EmptyTitle => _filter switch
+    {
+        TaskItemStatus.Pending => "Nothing pending",
+        TaskItemStatus.Completed => "No completed tasks yet",
+        _ => "No tasks yet"
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _result = await Api.GetTasksAsync(_page, PageSize, _filter);
+
+            // If the last item on a page was removed, step back a page
+            if (_result.Items.Count == 0 && _page > 1)
+            {
+                _page--;
+                _result = await Api.GetTasksAsync(_page, PageSize, _filter);
+            }
+
+            _summary = await Api.GetSummaryAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SetFilterAsync(TaskItemStatus? filter)
+    {
+        if (filter == _filter) return;
+        _filter = filter;
+        _page = 1;
+        _result = null;
+        await LoadAsync();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private void OpenCreate()
+    {
+        _editing = null;
+        _showForm = true;
+    }
+
+    private void OpenEdit(TaskDto task)
+    {
+        _editing = task;
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editing = null;
+    }
+
+    private void AskDelete(TaskDto task) => _deleting = task;
+
+    private async Task OnSavedAsync(TaskDto task)
+    {
+        Toast.Success(_editing is null ? $"“{task.Title}” created." : $"“{task.Title}” updated.");
+        CloseForm();
+        await LoadAsync();
+    }
+
+    private async Task CompleteAsync(TaskDto task)
+    {
+        try
+        {
+            await Api.CompleteAsync(task.Id);
+            Toast.Success($"“{task.Title}” is done.");
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            HandleError(ex);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var task = _deleting!;
+        _deleting = null;
+        try
+        {
+            await Api.DeleteAsync(task.Id);
+            Toast.Success($"“{task.Title}” deleted.");
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            HandleError(ex);
+        }
+    }
+
+    private void HandleError(ApiException ex)
+    {
+        Toast.Error(ex.Message);
+        if (ex.IsUnauthorized)
+            Nav.NavigateTo("login?returnUrl=tasks");
+    }
+}

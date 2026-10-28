@@ -1,0 +1,16 @@
+@* Previous / Next buttons for server-side paging *@
+<nav class="pager" aria-label="Pages">
+    <button class="btn btn-ghost" disabled="@(Page <= 1)" @onclick="() => OnPageChanged.InvokeAsync(Page - 1)">
+        <i class="ti ti-chevron-left" aria-hidden="true"></i> Previous
+    </button>
+    <span class="pager-info">Page <strong>@Page</strong> of @Math.Max(TotalPages, 1)</span>
+    <button class="btn btn-ghost" disabled="@(Page >= TotalPages)" @onclick="() => OnPageChanged.InvokeAsync(Page + 1)">
+        Next <i class="ti ti-chevron-right" aria-hidden="true"></i>
+    </button>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public int Page { get; set; }
+    [Parameter, EditorRequired] public int TotalPages { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+}

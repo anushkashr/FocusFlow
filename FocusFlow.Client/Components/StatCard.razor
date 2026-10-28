@@ -1,0 +1,16 @@
+<div class="stat-card stat-@Tone">
+    <span class="stat-icon"><i class="ti @Icon" aria-hidden="true"></i></span>
+    <div>
+        <div class="stat-value">@Value</div>
+        <div class="stat-label">@Label</div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Icon { get; set; } = string.Empty;
+
+    // aqua, green, coral or red
+    [Parameter] public string Tone { get; set; } = "aqua";
+}

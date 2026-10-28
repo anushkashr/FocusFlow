@@ -1,0 +1,107 @@
+@* Create or edit a task. Validation comes from the [Required] / [FutureDate] attributes
+   on TaskInput (in FocusFlow.Shared), and each message shows under its own field. *@
+@inject TaskApiClient Api
+@inject NavigationManager Nav
+
+<EditForm Model="_input" OnValidSubmit="SaveAsync" class="form" novalidate>
+    <DataAnnotationsValidator />
+
+    <div class="field">
+        <label for="task-title">Title</label>
+        <InputText id="task-title" class="input" @bind-Value="_input.Title" placeholder="Finish the API docs" autofocus />
+        <ValidationMessage For="() => _input.Title" />
+    </div>
+
+    <div class="field">
+        <label for="task-description">Description <span class="optional">optional</span></label>
+        <InputTextArea id="task-description" class="input" rows="3" @bind-Value="_input.Description"
+                       placeholder="Add any details that will help later" />
+        <ValidationMessage For="() => _input.Description" />
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="task-due">Due date</label>
+            <InputDate id="task-due" class="input" @bind-Value="_input.DueDate" />
+            <ValidationMessage For="() => _input.DueDate" />
+        </div>
+
+        <div class="field">
+            <label for="task-status">Status</label>
+            <InputSelect id="task-status" class="input" @bind-Value="_input.Status">
+                @foreach (var status in Enum.GetValues<TaskItemStatus>())
+                {
+                    <option value="@status">@status</option>
+                }
+            </InputSelect>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-error"><i class="ti ti-alert-circle" aria-hidden="true"></i> @_error</div>
+    }
+
+    <div class="form-actions">
+        <button type="button" class="btn btn-ghost" @onclick="OnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="ti ti-loader-2 spin" aria-hidden="true"></i>
+                <span>Saving…</span>
+            }
+            else
+            {
+                <i class="ti ti-check" aria-hidden="true"></i>
+                <span>@(Existing is null ? "Create task" : "Save changes")</span>
+            }
+        </button>
+    </div>
+</EditForm>
+
+@code {
+    // Null when creating a new task
+    [Parameter] public TaskDto? Existing { get; set; }
+    [Parameter] public EventCallback<TaskDto> OnSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private TaskInput _input = new();
+    private bool _saving;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _input = Existing is null
+            ? new TaskInput { DueDate = DateOnly.FromDateTime(DateTime.Today).AddDays(1) }
+            : new TaskInput
+            {
+                Title = Existing.Title,
+                Description = Existing.Description,
+                DueDate = Existing.DueDate,
+                Status = Existing.Status
+            };
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var saved = Existing is null
+                ? await Api.CreateAsync(_input)
+                : await Api.UpdateAsync(Existing.Id, _input);
+            await OnSaved.InvokeAsync(saved);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+            if (ex.IsUnauthorized)
+                Nav.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri))}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
